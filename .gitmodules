@@ -1,3 +1,4 @@
 [submodule "srv-entrega"]
 	path = srv-entrega
 	url = https://github.com/DiogoHumberto/srv-entrega.git
+	branch = master
