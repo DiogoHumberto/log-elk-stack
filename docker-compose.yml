@@ -16,6 +16,11 @@ services:
           - elasticsearch_data:/usr/share/elasticsearch/data
       networks:
           - elastic
+      healthcheck:
+        test: ["CMD", "curl", "-f", "http://localhost:9200/_cluster/health"]
+        interval: 30s
+        timeout: 10s
+        retries: 5
 
     kibana:
       image: docker.elastic.co/kibana/kibana:8.3.3
@@ -25,10 +30,10 @@ services:
       environment:
           ELASTICSEARCH_URL: http://elasticsearch:9200
           ELASTICSEARCH_HOSTS: '["http://elasticsearch:9200"]'
-      depends_on:
-          - elasticsearch
       networks:
           - elastic
+      depends_on:
+          - elasticsearch
 
     logstash:
       image: docker.elastic.co/logstash/logstash:8.3.3
@@ -45,13 +50,19 @@ services:
         LS_JAVA_OPTS: "-Xmx256m -Xms256m"
       networks:
         - elastic
+      healthcheck:
+        test: ["CMD", "curl", "-f", "http://localhost:9600"]
+        interval: 10s
+        timeout: 5s
+        retries: 3
+        start_period: 30s
       depends_on:
         - elasticsearch
         
     rabbitmq:
       image: rabbitmq:3-management-alpine
       container_name: rabbitmq
-      #restart: always
+      #restart: unless-stopped
       ports:
         - 5672:5672
         - 15672:15672
@@ -68,6 +79,35 @@ services:
         retries: 3
       networks:
         - elastic  
+
+    app-1: &app
+      image: diogohumberto/srv-entrega:1.0
+      environment:
+        - RABBITMQ.HOST=rabbitmq
+      restart: unless-stopped
+      depends_on:
+        rabbitmq:
+          condition: service_healthy
+        logstash:
+          condition: service_healthy
+      networks:
+        - elastic 
+
+    app-2:
+      <<: *app
+
+    nginx:
+      image: nginx:stable-alpine
+      ports:
+        - "80:80"
+      volumes:
+        - ./nginx:/etc/nginx/conf.d
+      restart: unless-stopped
+      depends_on:
+        - app-1
+        - app-2
+      networks:
+        - elastic 
 
 networks:
   elastic:
